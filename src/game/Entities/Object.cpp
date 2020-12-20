@@ -2021,6 +2021,46 @@ Creature* WorldObject::SummonCreature(uint32 id, float x, float y, float z, floa
     return WorldObject::SummonCreature(TempSpawnSettings(this, id, x, y, z, ang, spwtype, despwtime, asActiveObject, setRun, pathId, faction, modelId, spawnCounting, forcedOnTop), GetMap());
 }
 
+GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map)
+{
+    GameObjectData const* data = sObjectMgr.GetGOData(dbGuid);
+    MANGOS_ASSERT(data);
+    GameObject* gameobject = GameObject::CreateGameObject(data->id);
+    if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT)))
+    {
+        delete gameobject;
+        return nullptr;
+    }
+    map->Add(gameobject);
+    return gameobject;
+}
+
+Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map)
+{
+    CreatureData const* data = sObjectMgr.GetCreatureData(dbGuid);
+    if (!data)
+    {
+        sLog.outErrorDb("Creature (GUID: %u) not found in table `creature`, can't load. ", dbGuid);
+        return nullptr;
+    }
+
+    CreatureInfo const* cinfo = ObjectMgr::GetCreatureTemplate(data->id);
+    if (!cinfo)
+    {
+        sLog.outErrorDb("Creature (Entry: %u) not found in table `creature_template`, can't load. ", data->id);
+        return nullptr;
+    }
+
+    Creature* creature = new Creature;
+    // DEBUG_LOG("Spawning creature %u",*itr);
+    if (!creature->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(cinfo->GetHighGuid())))
+    {
+        delete creature;
+        return nullptr;
+    }
+    return creature;
+}
+
 // how much space should be left in front of/ behind a mob that already uses a space
 #define OCCUPY_POS_DEPTH_FACTOR                          1.8f
 
