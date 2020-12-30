@@ -213,6 +213,7 @@ inline bool IsAuraRemoveOnStacking(SpellEntry const* spellInfo, int32 effIdx) //
         case SPELL_AURA_MOD_INCREASE_ENERGY:
         case SPELL_AURA_MOD_POWER_COST_SCHOOL_PCT:
         case SPELL_AURA_MOD_INCREASE_HEALTH:
+        case SPELL_AURA_MOD_STAT:
             return false;
         default:
             return true;
@@ -491,6 +492,7 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
         case 30982:         // Crippling Poison
         case 31332:         // Dire Wolf Visual
         case 31690:         // Putrid Mushroom
+        case 31722:         // Immolation
         case 31792:         // Bear Form (Shapeshift)
         case 32007:         // Mo'arg Engineer Transform Visual
         case 32064:         // Battle Shout
@@ -507,6 +509,7 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
         case 35319:         // Electric Skin
         case 35408:         // Fear Proc
         case 35596:         // Power of the Legion
+        case 35747:         // Flame Buffet
         case 35841:         // Draenei Spirit Visual
         case 35850:         // Draenei Spirit Visual 2
         case 35917:         // Firey Intellect
@@ -522,6 +525,7 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
         case 37497:         // Shadowmoon Ghost Invisibility (Ghostrider of Karabor in SMV) 
         case 37509:         // Ghostly Facade
         case 37816:         // Shadowform
+        case 38732:         // Fire Shield
         case 37863:         // Disease Cloud
         case 38844:         // Unholy Aura
         case 38847:         // Diminish Soul
@@ -538,6 +542,7 @@ inline bool IsSpellRemovedOnEvade(SpellEntry const* spellInfo)
         case 44604:         // Enchantment of Spell Haste
         case 44855:         // Out of Phase
         case 45033:         // Abyssal Transformation
+        case 45187:         // Dawnblade Attack
         case 45822:         // Iceblood Warmaster
         case 45823:         // Tower Point Warmaster
         case 45824:         // West Frostwolf Warmaster
@@ -1382,7 +1387,6 @@ inline uint32 GetAffectedTargets(SpellEntry const* spellInfo, WorldObject* caste
                 case 30541:                                 // Blaze (Magtheridon)
                 case 30769:                                 // Pick Red Riding Hood (Karazhan, Big Bad Wolf)
                 case 30835:                                 // Infernal Relay (Karazhan, Prince Malchezaar)
-                case 31347:                                 // Doom (Hyjal Summit, Azgalor)
                 case 32312:                                 // Move 1 (Karazhan, Chess Event)
                 case 33711:                                 // Murmur's Touch (Shadow Labyrinth, Murmur)
                 case 37388:                                 // Move 2 (Karazhan, Chess Event)
@@ -1402,7 +1406,6 @@ inline uint32 GetAffectedTargets(SpellEntry const* spellInfo, WorldObject* caste
                 case 28542:                                 // Life Drain (Naxx, Sapphiron)
                     return 2;
                 case 30004:                                 // Flame Wreath (Karazhan, Shade of Aran)
-                case 31298:                                 // Sleep (Hyjal Summit, Anetheron)
                 case 39341:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Horde
                 case 39344:                                 // Karazhan - Chess, Medivh CHEAT: Fury of Medivh, Target Alliance
                 case 39992:                                 // Needle Spine Targeting (BT, Warlord Najentus)

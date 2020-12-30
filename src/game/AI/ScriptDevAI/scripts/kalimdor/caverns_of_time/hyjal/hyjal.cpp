@@ -805,13 +805,15 @@ uint8 GetRandomWavePath(WavePaths path)
     }
 }
 
-uint32 GetRunningPerWaveMobEntry(uint32 entry)
+uint32 GetRunningPerWaveMobEntry(uint32 entry, uint32 waveIndex)
 {
     switch (entry)
     {
+        case NPC_FROST:
+            if (waveIndex == 6) // this wave runs
+                return true;
         case NPC_KAZROGAL:
         case NPC_AZGALOR:
-        case NPC_FROST:
             return false;
         default: return true;
     }
@@ -956,14 +958,7 @@ void instance_mount_hyjal::OnCreatureCreate(Creature* creature)
         case NPC_STALK:
         {
             ObjectGuid spawner = creature->GetSpawnerGuid(); // not loaded in map - guid is enough
-            if (!spawner) // Static spawns in Scourge base should never grant XP, loot or reputation
-            {
-                creature->SetNoXP(true);
-                creature->SetNoLoot(true);
-                creature->SetNoReputation(true);
-                return;
-            }
-            else if (spawner.GetEntry() != NPC_HYJAL_DESPAWN_TRIGGER && m_hyjalOverheadEnable) // Overrun mobs are not counted
+            if (spawner && spawner.GetEntry() != NPC_HYJAL_DESPAWN_TRIGGER && m_hyjalOverheadEnable) // Overrun mobs are not counted
                 m_waveSpawns.push_back(creature->GetObjectGuid());
             break;
         }
@@ -1019,11 +1014,51 @@ void instance_mount_hyjal::OnObjectCreate(GameObject* go)
     }
 }
 
+void instance_mount_hyjal::OnCreatureRespawn(Creature* creature)
+{
+    switch (creature->GetEntry())
+    {
+        case NPC_LESSER_INFERNAL: // need to despawn like wave mobs
+        case NPC_GHOUL:
+        case NPC_NECRO:
+        case NPC_ABOMI:
+        case NPC_BANSH:
+        case NPC_CRYPT:
+        case NPC_GARGO:
+        case NPC_FROST:
+        case NPC_INFERNAL:
+        case NPC_STALK:
+        {
+            ObjectGuid spawner = creature->GetSpawnerGuid(); // not loaded in map - guid is enough
+            if (!spawner) // Static spawns in Scourge base should never grant XP, loot or reputation
+            {
+                creature->SetNoXP(true);
+                creature->SetNoLoot(true);
+                creature->SetNoReputation(true);
+                return;
+            }
+            break;
+        }
+        case NPC_INFERNAL_RELAY:
+        case NPC_INFERNAL_TARGET:
+            static_cast<CreatureAI*>(creature->AI())->SetDeathPrevention(true);
+            creature->SetCanEnterCombat(false); // on retail they enter combat, likely for some guardian purposes for the infernals - on our end they bug out friendlies
+            break;
+    }
+}
+
 void instance_mount_hyjal::OnCreatureEnterCombat(Creature* pCreature)
 {
     switch (pCreature->GetEntry())
     {
         case NPC_ARCHIMONDE:  SetData(TYPE_ARCHIMONDE, IN_PROGRESS);  break;
+        case NPC_INFERNAL_RELAY:
+        case NPC_INFERNAL_TARGET:
+        {
+            sLog.outCustomLog("Hyjal Infernal entered combat:");
+            sLog.traceLog();
+            break;
+        }
     }
 }
 
@@ -1033,6 +1068,11 @@ void instance_mount_hyjal::OnCreatureDeath(Creature* creature)
     {
         case NPC_WINTERCHILL:
             SetData(TYPE_WINTERCHILL, DONE);
+            if (Creature* jaina = GetSingleCreatureFromStorage(NPC_JAINA))
+            {
+                jaina->AI()->SendAIEvent(AI_EVENT_CUSTOM_D, jaina, jaina);
+                jaina->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+            }
             m_waveSpawns.erase(std::remove(m_waveSpawns.begin(), m_waveSpawns.end(), creature->GetObjectGuid()), m_waveSpawns.end());
             break;
         case NPC_ANETHERON:
@@ -1050,6 +1090,11 @@ void instance_mount_hyjal::OnCreatureDeath(Creature* creature)
         }
         case NPC_KAZROGAL:
             SetData(TYPE_KAZROGAL, DONE);
+            if (Creature* thrall = GetSingleCreatureFromStorage(NPC_THRALL))
+            {
+                thrall->AI()->SendAIEvent(AI_EVENT_CUSTOM_D, thrall, thrall);
+                thrall->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE_TO_NPC);
+            }
             m_waveSpawns.erase(std::remove(m_waveSpawns.begin(), m_waveSpawns.end(), creature->GetObjectGuid()), m_waveSpawns.end());
             break;
         case NPC_AZGALOR:
@@ -1093,6 +1138,13 @@ void instance_mount_hyjal::OnCreatureDeath(Creature* creature)
         case NPC_THRALL:
             FailEvent();
             break;
+        case NPC_INFERNAL_RELAY:
+        case NPC_INFERNAL_TARGET:
+        {
+            sLog.outCustomLog("Hyjal Infernal died:");
+            sLog.traceLog();
+            break;
+        }
     }
 }
 
@@ -1116,9 +1168,6 @@ void instance_mount_hyjal::SetData(uint32 type, uint32 data)
     switch (type)
     {
         case TYPE_AZGALOR:
-            if (data == DONE)
-                SpawnArchimonde();
-            // no break
         case TYPE_WINTERCHILL:
         case TYPE_ANETHERON:
         case TYPE_KAZROGAL:
@@ -1142,6 +1191,12 @@ void instance_mount_hyjal::SetData(uint32 type, uint32 data)
             {
                 DespawnOverrun(BASE_ELF);
                 m_nextInvasionWaveTimer = 0;
+
+                if (Creature* archimonde = GetSingleCreatureFromStorage(NPC_ARCHIMONDE))
+                {
+                    archimonde->SetRespawnDelay(30, true);
+                    archimonde->ForcedDespawn();
+                }
             }
             break;
         case TYPE_WIN:
@@ -1301,7 +1356,7 @@ void instance_mount_hyjal::SpawnWave(uint32 index, bool setTimer)
     DoUpdateWorldState(WORLD_STATE_MOUNT_HYJAL_ENEMYCOUNT, m_hyjalEnemyCount + newSpawns);
     for (HyjalWaveMob& mob : m_hyjalWavesData[index].waveMobs)
     {
-        Creature* waveSpawn = spawner->SummonCreature(mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_DEAD_DESPAWN, 0, true, GetRunningPerWaveMobEntry(mob.mobEntry), GetRandomWavePath(mob.path));
+        Creature* waveSpawn = spawner->SummonCreature(mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_DEAD_DESPAWN, 0, true, GetRunningPerWaveMobEntry(mob.mobEntry, index), GetRandomWavePath(mob.path));
         if (index == 0) // The very first wave should never grant XP, loot or reputation. ToDo: According to a wowhead comment there should be a cooldown period after you've killed one boss after which the first wave of the next boss also won't grant any XP, loot or reputation
         {
             waveSpawn->SetNoXP(true);
@@ -1405,19 +1460,22 @@ void instance_mount_hyjal::SpawnInvasionWave(uint32 index, bool setTimer)
     {
         for (HyjalWaveMob& mob : m_invasionWavesData[index].waveMobs)
         {
+            TempSpawnSettings settings(spawner, mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_DEAD_DESPAWN, 0, true, true, GetRandomWavePath(mob.path));
+            if (mob.path == PATH_NONE)
+                settings.movegen = IDLE_MOTION_TYPE;
             if (index < 7)
             {
-                Creature* waveSpawn = spawner->SummonCreature(mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_DEAD_DESPAWN, 0, true, true, GetRandomWavePath(mob.path));
+                Creature* waveSpawn = WorldObject::SummonCreature(settings, spawner->GetMap());
                 m_overrunSpawns[BASE_ALLY].push_back(waveSpawn->GetObjectGuid());
             }
             else if (index < 14)
             {
-                Creature* waveSpawn = spawner->SummonCreature(mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_DEAD_DESPAWN, 0, true, true, GetRandomWavePath(mob.path));
+                Creature* waveSpawn = WorldObject::SummonCreature(settings, spawner->GetMap());
                 m_overrunSpawns[BASE_HORDE].push_back(waveSpawn->GetObjectGuid());
             }
             else
             {
-                Creature* waveSpawn = spawner->SummonCreature(mob.mobEntry, mob.x, mob.y, mob.z, mob.ori, TEMPSPAWN_MANUAL_DESPAWN, 0, true, true, GetRandomWavePath(mob.path));
+                Creature* waveSpawn = WorldObject::SummonCreature(settings, spawner->GetMap());
                 waveSpawn->SetRespawnDelay(350);
                 waveSpawn->SetCorpseDelay(300);
                 m_overrunSpawns[BASE_ELF].push_back(waveSpawn->GetObjectGuid());
@@ -1462,6 +1520,7 @@ void instance_mount_hyjal::StartEvent(HyjalEvents eventId)
             break;
         case THRALL_WIN:
             RetreatBase(BASE_HORDE);
+            SpawnArchimonde();
             break;
     }
 }
