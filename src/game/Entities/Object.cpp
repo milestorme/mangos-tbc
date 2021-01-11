@@ -2027,6 +2027,10 @@ GameObject* WorldObject::SpawnGameObject(uint32 dbGuid, Map* map)
 {
     GameObjectData const* data = sObjectMgr.GetGOData(dbGuid);
     MANGOS_ASSERT(data);
+
+    if (data->spawnMask && !map->CanSpawn(TYPEID_GAMEOBJECT, dbGuid))
+        return nullptr;
+
     GameObject* gameobject = GameObject::CreateGameObject(data->id);
     if (!gameobject->LoadFromDB(dbGuid, map, map->GenerateLocalLowGuid(HIGHGUID_GAMEOBJECT)))
     {
@@ -2052,6 +2056,9 @@ Creature* WorldObject::SpawnCreature(uint32 dbGuid, Map* map)
         sLog.outErrorDb("Creature (Entry: %u) not found in table `creature_template`, can't load. ", data->id);
         return nullptr;
     }
+
+    if (data->spawnMask && !map->CanSpawn(TYPEID_UNIT, dbGuid))
+        return nullptr;
 
     Creature* creature = new Creature;
     // DEBUG_LOG("Spawning creature %u",*itr);
